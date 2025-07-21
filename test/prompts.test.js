@@ -197,9 +197,9 @@ Create comprehensive documentation for the API.`;
       assert.ok(display.includes('⎿ fix/bug-123: 3/3 (100%)'));
       
       // Check progress bars
-      assert.ok(display.includes('[████████■■]')); // 80% = 8 filled squares
+      assert.ok(display.includes('[████████□□]')); // 80% = 8 filled squares
       assert.ok(display.includes('[████□□□□□□]')); // 40% = 4 filled squares  
-      assert.ok(display.includes('[■■■■■■■■■■]')); // 100% = 10 filled squares
+      assert.ok(display.includes('[██████████]')); // 100% = 10 filled squares
     });
 
     it('should handle empty summaries', () => {
@@ -238,7 +238,7 @@ Create comprehensive documentation for the API.`;
       const display = formatBranchSummary(summaries);
       
       assert.ok(display.includes('⎿ solo-branch: 1/2 (50%)'));
-      assert.ok(display.includes('[■■■■■□□□□□]')); // 50% = 5 filled squares
+      assert.ok(display.includes('[█████□□□□□]')); // 50% = 5 filled squares
     });
 
     it('should handle branch names with special characters', () => {
