@@ -1,0 +1,39 @@
+{
+  "branch": "ERAUN-22",
+  "projectPath": "/Users/erauner/git/side/Software-planning-mcp",
+  "goals": {
+    "1753112159975": {
+      "id": "1753112159975",
+      "description": "Test branch awareness",
+      "createdAt": "2025-07-21T15:35:59.975Z"
+    },
+    "1753112807807": {
+      "id": "1753112807807",
+      "description": "Test branch-aware functionality in the MCP project",
+      "createdAt": "2025-07-21T15:46:47.807Z"
+    }
+  },
+  "plans": {
+    "1753112159975": {
+      "goalId": "1753112159975",
+      "todos": [],
+      "updatedAt": "2025-07-21T15:35:59.975Z"
+    },
+    "1753112807807": {
+      "goalId": "1753112807807",
+      "todos": [
+        {
+          "id": "1753112813604",
+          "title": "Validate branch switching functionality",
+          "description": "Test that switching between branches shows different todo lists and maintains proper isolation",
+          "complexity": 4,
+          "isComplete": true,
+          "createdAt": "2025-07-21T15:46:53.604Z",
+          "updatedAt": "2025-07-21T15:47:12.973Z"
+        }
+      ],
+      "updatedAt": "2025-07-21T15:47:12.973Z"
+    }
+  },
+  "lastUpdated": "2025-07-21T15:47:12.973Z"
+}

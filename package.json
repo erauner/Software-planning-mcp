@@ -11,13 +11,16 @@
     "build"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "build": "npm run check:stdout && tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "build:unsafe": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "test": "npm run build && node --test test/*.test.js",
     "test:watch": "npm run build && node --test --watch test/*.test.js",
-    "test:coverage": "npm run build && node --test --experimental-test-coverage test/*.test.js"
+    "test:coverage": "npm run build && node --test --experimental-test-coverage test/*.test.js",
+    "check:stdout": "node scripts/check-stdout-pollution.mjs",
+    "test:stdout": "npm run build:unsafe && node --test test/stdout-pollution.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "0.6.0"
