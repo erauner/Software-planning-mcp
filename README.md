@@ -181,6 +181,82 @@ Test all features using the MCP inspector:
 pnpm run inspector
 ```
 
+## Storage Modes 💾
+
+The Software Planning Tool supports two storage modes:
+
+### File Mode (Default)
+- Stores planning data in local `.planning/` directory
+- Perfect for single-user, local development
+- No additional configuration required
+
+### Redis Mode (Multi-User/Remote)
+- Stores planning data in Redis/Dragonfly
+- Enables multi-user collaboration
+- Session isolation by user and repository
+- Perfect for remote deployment
+
+#### Configuration
+
+Set environment variables to enable Redis mode:
+
+```bash
+# Enable Redis storage
+STORAGE_MODE=redis
+REDIS_URL=redis://localhost:6379
+REDIS_KEY_PREFIX=planning
+REDIS_TTL=2592000  # 30 days
+
+# Repository settings
+REPO_ID_MODE=auto
+ENABLE_MULTI_REPO=true
+```
+
+#### Docker Deployment
+
+Run with Docker for easy deployment:
+
+```bash
+# File mode
+docker run -e STORAGE_MODE=file \
+  ghcr.io/erauner/software-planning-mcp:latest
+
+# Redis mode
+docker run -e STORAGE_MODE=redis \
+  -e REDIS_URL=redis://your-redis:6379 \
+  ghcr.io/erauner/software-planning-mcp:latest
+```
+
+#### Session Management
+
+In Redis mode, all tools accept additional parameters:
+
+```typescript
+{
+  goal: string,
+  userId?: string,      // Required for Redis mode
+  sessionId?: string,   // Optional, auto-generated if not provided
+  repository?: string,  // Repository identifier
+  branch?: string       // Git branch name
+}
+```
+
+## Remote Usage 🌐
+
+For remote deployment (e.g., Kubernetes), use with an HTTP-to-MCP bridge:
+
+```json
+{
+  "mcpServers": {
+    "software-planning-remote": {
+      "command": "/path/to/http-mcp-client.js",
+      "args": ["https://your-domain.com/mcp"],
+      "description": "Remote Software Planning Server"
+    }
+  }
+}
+```
+
 ## License 📄
 
 MIT

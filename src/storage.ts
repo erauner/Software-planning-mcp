@@ -1,9 +1,9 @@
 import { execSync } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
-import { Goal, ImplementationPlan, StorageData, Todo } from "./types.js";
+import { Goal, ImplementationPlan, IStorage, StorageData, Todo } from "./types.js";
 
-export class Storage {
+export class Storage implements IStorage {
   private storagePath: string;
   private data: StorageData;
   private projectPath: string;
@@ -90,7 +90,7 @@ export class Storage {
     }
   }
 
-  private async save(): Promise<void> {
+  async save(): Promise<void> {
     this.data.lastUpdated = new Date().toISOString();
     await fs.writeFile(this.storagePath, JSON.stringify(this.data, null, 2));
   }
@@ -191,10 +191,57 @@ export class Storage {
     return todo;
   }
 
-  async getTodos(goalId: string): Promise<Todo[]> {
-    const plan = await this.getPlan(goalId);
-    return plan?.todos || [];
+  async getTodos(goalId?: string): Promise<Todo[]> {
+    if (goalId) {
+      const plan = await this.getPlan(goalId);
+      return plan?.todos || [];
+    }
+
+    return Object.values(this.data.plans).flatMap((plan) => plan.todos);
+  }
+
+  async updateTodo(id: string, updates: Partial<Todo>): Promise<void> {
+    // Find todo across all plans and update it
+    for (const plan of Object.values(this.data.plans)) {
+      const todoIndex = plan.todos.findIndex(todo => todo.id === id);
+      if (todoIndex !== -1) {
+        plan.todos[todoIndex] = {
+          ...plan.todos[todoIndex],
+          ...updates,
+          updatedAt: new Date().toISOString(),
+        };
+        plan.updatedAt = new Date().toISOString();
+        await this.save();
+        return;
+      }
+    }
+    throw new Error(`Todo with id ${id} not found`);
+  }
+
+  async setGoal(goal: Goal): Promise<void> {
+    this.data.goals[goal.id] = goal;
+    await this.save();
+  }
+
+  async savePlan(plan: string): Promise<void> {
+    // Convert plan text to todos - simplified implementation
+    const lines = plan.split('\n').filter(line => line.trim());
+
+    // Find or create a goal
+    const goalIds = Object.keys(this.data.goals);
+    const goalId = goalIds[0] || Date.now().toString();
+
+    if (goalIds.length === 0) {
+      await this.createGoal("Plan from text");
+    }
+
+    // Create todos from plan text
+    for (const line of lines) {
+      await this.addTodo(goalId, {
+        title: `Step`,
+        description: line.trim(),
+        complexity: 3,
+      });
+    }
   }
 }
-
-// Remove the global storage instance - it will be created per project/branch

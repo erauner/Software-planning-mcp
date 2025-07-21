@@ -1,0 +1,60 @@
+services:
+  # Redis cache for testing (simpler than Dragonfly)
+  redis:
+    image: redis:alpine
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+
+  # Software Planning MCP - File Mode
+  mcp-file-mode:
+    build: .
+    environment:
+      - STORAGE_MODE=file
+      - NODE_ENV=development
+    volumes:
+      - ./test-data:/app/data
+    stdin_open: true
+    tty: true
+    command: ["node", "/app/build/index.js"]
+
+  # Software Planning MCP - Redis Mode
+  mcp-redis-mode:
+    build: .
+    environment:
+      - STORAGE_MODE=redis
+      - REDIS_URL=redis://redis:6379  # Use service name, internal port
+      - REDIS_KEY_PREFIX=planning
+      - REDIS_TTL=2592000
+      - NODE_ENV=development
+    depends_on:
+      redis:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    command: ["node", "/app/build/index.js"]
+
+  # Test runner service
+  test-runner:
+    build:
+      context: .
+      target: builder  # Use builder stage which has dev dependencies
+    environment:
+      - STORAGE_MODE=${STORAGE_MODE:-file}
+      - REDIS_URL=redis://dragonfly:6379
+      - TEST_REDIS_URL=redis://dragonfly:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./test:/app/test
+      - ./src:/app/src
+      - ./coverage:/app/coverage
+    command: ["pnpm", "test:all-modes"]
+
+volumes:
+  redis-data:

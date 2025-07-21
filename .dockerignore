@@ -1,0 +1,10 @@
+node_modules
+build
+coverage
+.git
+.env
+test-data
+*.log
+.DS_Store
+.planning
+test-manual.mjs
