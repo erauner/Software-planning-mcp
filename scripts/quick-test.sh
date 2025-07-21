@@ -26,17 +26,17 @@ fi
 
 # Test Redis Mode
 echo "📱 Testing Redis Mode..."
-echo "  🐳 Starting Dragonfly via docker-compose..."
-docker-compose up -d dragonfly
+echo "  🐳 Starting Redis via docker-compose..."
+docker-compose up -d redis
 
-echo "  ⏳ Waiting for Dragonfly to be healthy..."
+echo "  ⏳ Waiting for Redis to be healthy..."
 for i in {1..30}; do
-    if docker-compose exec -T dragonfly redis-cli ping >/dev/null 2>&1; then
-        echo "  ✅ Dragonfly is ready"
+    if docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+        echo "  ✅ Redis is ready"
         break
     fi
     if [ $i -eq 30 ]; then
-        echo "  ❌ Dragonfly failed to start"
+        echo "  ❌ Redis failed to start"
         docker-compose down -v 2>/dev/null || true
         exit 1
     fi
