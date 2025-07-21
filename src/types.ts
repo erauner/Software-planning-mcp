@@ -22,6 +22,9 @@ export interface ImplementationPlan {
 }
 
 export interface StorageData {
+  branch: string;
+  projectPath: string;
   goals: Record<string, Goal>;
   plans: Record<string, ImplementationPlan>;
+  lastUpdated: string | null;
 }

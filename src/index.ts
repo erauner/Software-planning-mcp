@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { promises as fs } from 'fs';
+import path from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -9,13 +11,29 @@ import {
   McpError,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { storage } from './storage.js';
-import { SEQUENTIAL_THINKING_PROMPT, formatPlanAsTodos } from './prompts.js';
+import { Storage } from './storage.js';
+import { SEQUENTIAL_THINKING_PROMPT, formatPlanAsTodos, formatTodosForDisplay, formatBranchSummary } from './prompts.js';
 import { Goal, Todo } from './types.js';
 
 class SoftwarePlanningServer {
   private server: Server;
+  private storageInstances: Map<string, Storage> = new Map();
+  private currentStorage: Storage | null = null;
   private currentGoal: Goal | null = null;
+
+  // Add method to get or create storage for a project/branch
+  private async getStorage(projectPath?: string, branch?: string): Promise<Storage> {
+    const path = projectPath || process.cwd();
+    const key = `${path}:${branch || 'auto'}`;
+    
+    if (!this.storageInstances.has(key)) {
+      const storage = new Storage(path, branch);
+      await storage.initialize();
+      this.storageInstances.set(key, storage);
+    }
+    
+    return this.storageInstances.get(key)!;
+  }
 
   constructor() {
     this.server = new Server(
@@ -75,13 +93,13 @@ class SoftwarePlanningServer {
           };
         }
         case 'planning://implementation-plan': {
-          if (!this.currentGoal) {
+          if (!this.currentGoal || !this.currentStorage) {
             throw new McpError(
               ErrorCode.InvalidParams,
               'No active goal. Start a new planning session first.'
             );
           }
-          const plan = await storage.getPlan(this.currentGoal.id);
+          const plan = await this.currentStorage.getPlan(this.currentGoal.id);
           if (!plan) {
             throw new McpError(
               ErrorCode.InvalidParams,
@@ -119,6 +137,14 @@ class SoftwarePlanningServer {
               goal: {
                 type: 'string',
                 description: 'The software development goal to plan',
+              },
+              projectPath: {
+                type: 'string',
+                description: 'Project directory path (defaults to current directory)',
+              },
+              branch: {
+                type: 'string',
+                description: 'Git branch name (auto-detected if not provided)',
               },
             },
             required: ['goal'],
@@ -206,28 +232,82 @@ class SoftwarePlanningServer {
             required: ['todoId', 'isComplete'],
           },
         },
+        {
+          name: 'list_branch_todos',
+          description: 'Show todo summary across all git branches',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: {
+                type: 'string',
+                description: 'Project directory path (defaults to current directory)',
+              },
+            },
+          },
+        },
+        {
+          name: 'switch_branch',
+          description: 'Switch to todos for a different branch',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              branch: {
+                type: 'string',
+                description: 'Branch name to switch to',
+              },
+              projectPath: {
+                type: 'string',
+                description: 'Project directory path',
+              },
+            },
+            required: ['branch'],
+          },
+        },
       ],
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       switch (request.params.name) {
         case 'start_planning': {
-          const { goal } = request.params.arguments as { goal: string };
-          this.currentGoal = await storage.createGoal(goal);
-          await storage.createPlan(this.currentGoal.id);
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: SEQUENTIAL_THINKING_PROMPT,
-              },
-            ],
+          const { goal, projectPath, branch } = request.params.arguments as {
+            goal: string;
+            projectPath?: string;
+            branch?: string;
           };
+          
+          // Get storage for this project/branch
+          this.currentStorage = await this.getStorage(projectPath, branch);
+          
+          // Check for existing goal/todos
+          const existingGoals = await this.currentStorage.getGoals();
+          const existingTodos = await this.currentStorage.getAllTodos();
+          
+          if (existingTodos.length > 0) {
+            // Continue existing session
+            this.currentGoal = Object.values(existingGoals)[0]; // Get most recent
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `⏺ Continuing: ${goal} (branch: ${this.currentStorage.getCurrentBranch()})\n\n${formatTodosForDisplay(existingTodos, this.currentStorage.getCurrentBranch())}\n\n${SEQUENTIAL_THINKING_PROMPT}`
+              }]
+            };
+          } else {
+            // Start new session
+            this.currentGoal = await this.currentStorage.createGoal(goal);
+            await this.currentStorage.createPlan(this.currentGoal.id);
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `⏺ Starting: ${goal} (branch: ${this.currentStorage.getCurrentBranch()})\n\n${SEQUENTIAL_THINKING_PROMPT}`
+              }]
+            };
+          }
         }
 
         case 'save_plan': {
-          if (!this.currentGoal) {
+          if (!this.currentGoal || !this.currentStorage) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'No active goal. Start a new planning session first.'
@@ -238,7 +318,7 @@ class SoftwarePlanningServer {
           const todos = formatPlanAsTodos(plan);
 
           for (const todo of todos) {
-            await storage.addTodo(this.currentGoal.id, todo);
+            await this.currentStorage.addTodo(this.currentGoal.id, todo);
           }
 
           return {
@@ -252,7 +332,7 @@ class SoftwarePlanningServer {
         }
 
         case 'add_todo': {
-          if (!this.currentGoal) {
+          if (!this.currentGoal || !this.currentStorage) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'No active goal. Start a new planning session first.'
@@ -263,7 +343,7 @@ class SoftwarePlanningServer {
             Todo,
             'id' | 'isComplete' | 'createdAt' | 'updatedAt'
           >;
-          const newTodo = await storage.addTodo(this.currentGoal.id, todo);
+          const newTodo = await this.currentStorage.addTodo(this.currentGoal.id, todo);
 
           return {
             content: [
@@ -276,7 +356,7 @@ class SoftwarePlanningServer {
         }
 
         case 'remove_todo': {
-          if (!this.currentGoal) {
+          if (!this.currentGoal || !this.currentStorage) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'No active goal. Start a new planning session first.'
@@ -284,7 +364,7 @@ class SoftwarePlanningServer {
           }
 
           const { todoId } = request.params.arguments as { todoId: string };
-          await storage.removeTodo(this.currentGoal.id, todoId);
+          await this.currentStorage.removeTodo(this.currentGoal.id, todoId);
 
           return {
             content: [
@@ -297,14 +377,14 @@ class SoftwarePlanningServer {
         }
 
         case 'get_todos': {
-          if (!this.currentGoal) {
+          if (!this.currentGoal || !this.currentStorage) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'No active goal. Start a new planning session first.'
             );
           }
 
-          const todos = await storage.getTodos(this.currentGoal.id);
+          const todos = await this.currentStorage.getTodos(this.currentGoal.id);
 
           return {
             content: [
@@ -317,7 +397,7 @@ class SoftwarePlanningServer {
         }
 
         case 'update_todo_status': {
-          if (!this.currentGoal) {
+          if (!this.currentGoal || !this.currentStorage) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'No active goal. Start a new planning session first.'
@@ -328,7 +408,7 @@ class SoftwarePlanningServer {
             todoId: string;
             isComplete: boolean;
           };
-          const updatedTodo = await storage.updateTodoStatus(
+          const updatedTodo = await this.currentStorage.updateTodoStatus(
             this.currentGoal.id,
             todoId,
             isComplete
@@ -344,6 +424,91 @@ class SoftwarePlanningServer {
           };
         }
 
+        case 'list_branch_todos': {
+          const { projectPath } = request.params.arguments as { projectPath?: string };
+          const projectDir = projectPath || process.cwd();
+          
+          // List all todo files in .planning directory
+          const planningDir = path.join(projectDir, '.planning');
+          let files = [];
+          try {
+            files = await fs.readdir(planningDir);
+          } catch {
+            // Directory doesn't exist
+            return {
+              content: [{
+                type: 'text',
+                text: 'No .planning directory found. Start a planning session to create todos.'
+              }]
+            };
+          }
+          
+          const branchSummaries = [];
+          for (const file of files) {
+            if (file.endsWith('.todos.json')) {
+              try {
+                const branchName = file.replace('.todos.json', '').replace(/-/g, '/');
+                const data = await fs.readFile(path.join(planningDir, file), 'utf-8');
+                const parsed = JSON.parse(data);
+                
+                const todos = Object.values(parsed.plans || {})
+                  .flatMap((plan: any) => plan.todos || []);
+                
+                branchSummaries.push({
+                  branch: branchName,
+                  total: todos.length,
+                  completed: todos.filter((t: any) => t.isComplete).length,
+                  percentage: todos.length > 0 
+                    ? Math.round((todos.filter((t: any) => t.isComplete).length / todos.length) * 100)
+                    : 0
+                });
+              } catch (error) {
+                console.error(`Error reading ${file}:`, error);
+              }
+            }
+          }
+          
+          return {
+            content: [{
+              type: 'text',
+              text: formatBranchSummary(branchSummaries)
+            }]
+          };
+        }
+
+        case 'switch_branch': {
+          const { branch, projectPath } = request.params.arguments as { 
+            branch: string; 
+            projectPath?: string; 
+          };
+          
+          // Get storage for the new branch
+          this.currentStorage = await this.getStorage(projectPath, branch);
+          
+          // Get existing todos for this branch
+          const existingTodos = await this.currentStorage.getAllTodos();
+          const existingGoals = await this.currentStorage.getGoals();
+          
+          if (existingTodos.length > 0) {
+            // Set current goal to the most recent one
+            this.currentGoal = Object.values(existingGoals)[0];
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `🔄 Switched to branch: ${branch}\n\n${formatTodosForDisplay(existingTodos, branch)}`
+              }]
+            };
+          } else {
+            return {
+              content: [{
+                type: 'text',
+                text: `🔄 Switched to branch: ${branch}\n\n⎿ No todos found. Use start_planning to begin.`
+              }]
+            };
+          }
+        }
+
         default:
           throw new McpError(
             ErrorCode.MethodNotFound,
@@ -354,7 +519,6 @@ class SoftwarePlanningServer {
   }
 
   async run() {
-    await storage.initialize();
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Software Planning MCP server running on stdio');

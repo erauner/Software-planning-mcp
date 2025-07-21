@@ -93,3 +93,50 @@ export const formatPlanAsTodos = (plan: string): Array<{
 
   return todos;
 };
+
+export function formatTodosForDisplay(todos: any[], branch: string): string {
+  const completed = todos.filter(t => t.isComplete);
+  const pending = todos.filter(t => !t.isComplete);
+  
+  let output = `⏺ Current Todos (branch: ${branch})\n\n`;
+  
+  if (pending.length > 0) {
+    output += '  ⎿ Active Tasks:\n';
+    pending.forEach(todo => {
+      output += `     ☐ ${todo.title}`;
+      if (todo.complexity !== undefined) {
+        output += ` (Complexity: ${todo.complexity})`;
+      }
+      output += '\n';
+    });
+  }
+  
+  if (completed.length > 0) {
+    output += '\n  ⎿ Completed:\n';
+    completed.forEach(todo => {
+      output += `     ☒ ${todo.title}\n`;
+    });
+  }
+  
+  if (todos.length === 0) {
+    output += '  ⎿ No todos yet. Start adding tasks!\n';
+  }
+  
+  return output;
+}
+
+export function formatBranchSummary(branchSummaries: any[]): string {
+  let output = '🌳 Todo Summary Across Branches\n\n';
+  
+  if (branchSummaries.length === 0) {
+    output += '  ⎿ No todos found in any branch\n';
+    return output;
+  }
+  
+  branchSummaries.forEach(summary => {
+    const progressBar = '■'.repeat(Math.floor(summary.percentage / 10)) + '□'.repeat(10 - Math.floor(summary.percentage / 10));
+    output += `  ⎿ ${summary.branch}: ${summary.completed}/${summary.total} (${summary.percentage}%) [${progressBar}]\n`;
+  });
+  
+  return output;
+}
