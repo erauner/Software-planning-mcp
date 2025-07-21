@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Dragonfly cache (matching your K8s setup)
+  dragonfly:
+    image: ghcr.io/dragonflydb/dragonfly:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly-data:/data
+    command: >
+      --logtostderr
+      --cache-mode
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Software Planning MCP - File Mode
+  mcp-file-mode:
+    build: .
+    environment:
+      - STORAGE_MODE=file
+      - NODE_ENV=development
+    volumes:
+      - ./test-data:/app/data
+    stdin_open: true
+    tty: true
+    command: ["node", "/app/build/index.js"]
+
+  # Software Planning MCP - Redis Mode
+  mcp-redis-mode:
+    build: .
+    environment:
+      - STORAGE_MODE=redis
+      - REDIS_URL=redis://dragonfly:6379
+      - REDIS_KEY_PREFIX=planning
+      - REDIS_TTL=2592000
+      - NODE_ENV=development
+    depends_on:
+      dragonfly:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    command: ["node", "/app/build/index.js"]
+
+  # Test runner service
+  test-runner:
+    build:
+      context: .
+      target: builder  # Use builder stage which has dev dependencies
+    environment:
+      - STORAGE_MODE=${STORAGE_MODE:-file}
+      - REDIS_URL=redis://dragonfly:6379
+      - TEST_REDIS_URL=redis://dragonfly:6379
+    depends_on:
+      dragonfly:
+        condition: service_healthy
+    volumes:
+      - ./test:/app/test
+      - ./src:/app/src
+      - ./coverage:/app/coverage
+    command: ["pnpm", "test:all-modes"]
+
+volumes:
+  dragonfly-data:
