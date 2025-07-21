@@ -36,7 +36,7 @@ export class Storage {
       return branch || "main";
     } catch (error) {
       // Not a git repo or git not available
-      console.log("Not a git repository, using default branch name");
+      console.error("Not a git repository, using default branch name");
       return "default";
     }
   }
@@ -80,11 +80,11 @@ export class Storage {
       const data = await fs.readFile(this.storagePath, "utf-8");
       this.data = JSON.parse(data);
 
-      console.log(`Loaded existing todos from ${this.storagePath}`);
-      console.log(`Branch: ${this.data.branch}, Todos: ${this.getTodoCount()}`);
+      console.error(`Loaded existing todos from ${this.storagePath}`);
+      console.error(`Branch: ${this.data.branch}, Todos: ${this.getTodoCount()}`);
     } catch (error) {
       // First time - create new file
-      console.log(`Creating new todo file for branch: ${this.currentBranch}`);
+      console.error(`Creating new todo file for branch: ${this.currentBranch}`);
       this.data.lastUpdated = new Date().toISOString();
       await this.save();
     }
