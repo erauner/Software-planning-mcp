@@ -20,13 +20,18 @@
     "test:watch": "npm run build && node --test --watch test/*.test.js",
     "test:coverage": "npm run build && node --test --experimental-test-coverage test/*.test.js",
     "check:stdout": "node scripts/check-stdout-pollution.mjs",
-    "test:stdout": "npm run build:unsafe && node --test test/stdout-pollution.test.js"
+    "test:stdout": "npm run build:unsafe && node --test test/stdout-pollution.test.js",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "0.6.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.44.0",
     "typescript": "^5.3.3"
   }
 }

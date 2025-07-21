@@ -25,13 +25,13 @@ class SoftwarePlanningServer {
   private async getStorage(projectPath?: string, branch?: string): Promise<Storage> {
     const path = projectPath || process.cwd();
     const key = `${path}:${branch || 'auto'}`;
-    
+
     if (!this.storageInstances.has(key)) {
       const storage = new Storage(path, branch);
       await storage.initialize();
       this.storageInstances.set(key, storage);
     }
-    
+
     return this.storageInstances.get(key)!;
   }
 
@@ -51,7 +51,7 @@ class SoftwarePlanningServer {
 
     this.setupResourceHandlers();
     this.setupToolHandlers();
-    
+
     this.server.onerror = (error) => console.error('[MCP Error]', error);
   }
 
@@ -274,18 +274,18 @@ class SoftwarePlanningServer {
             projectPath?: string;
             branch?: string;
           };
-          
+
           // Get storage for this project/branch
           this.currentStorage = await this.getStorage(projectPath, branch);
-          
+
           // Check for existing goal/todos
           const existingGoals = await this.currentStorage.getGoals();
           const existingTodos = await this.currentStorage.getAllTodos();
-          
+
           if (existingTodos.length > 0) {
             // Continue existing session
             this.currentGoal = Object.values(existingGoals)[0]; // Get most recent
-            
+
             return {
               content: [{
                 type: 'text',
@@ -296,7 +296,7 @@ class SoftwarePlanningServer {
             // Start new session
             this.currentGoal = await this.currentStorage.createGoal(goal);
             await this.currentStorage.createPlan(this.currentGoal.id);
-            
+
             return {
               content: [{
                 type: 'text',
@@ -427,7 +427,7 @@ class SoftwarePlanningServer {
         case 'list_branch_todos': {
           const { projectPath } = request.params.arguments as { projectPath?: string };
           const projectDir = projectPath || process.cwd();
-          
+
           // List all todo files in .planning directory
           const planningDir = path.join(projectDir, '.planning');
           let files = [];
@@ -442,25 +442,25 @@ class SoftwarePlanningServer {
               }]
             };
           }
-          
+
           const branchSummaries = [];
           for (const file of files) {
             if (file.endsWith('.todos.json')) {
               try {
                 const data = await fs.readFile(path.join(planningDir, file), 'utf-8');
                 const parsed = JSON.parse(data);
-                
+
                 // Use the branch name stored in the file data, not the filename
                 const branchName = parsed.branch || file.replace('.todos.json', '');
-                
+
                 const todos = Object.values(parsed.plans || {})
                   .flatMap((plan: any) => plan.todos || []);
-                
+
                 branchSummaries.push({
                   branch: branchName,
                   total: todos.length,
                   completed: todos.filter((t: any) => t.isComplete).length,
-                  percentage: todos.length > 0 
+                  percentage: todos.length > 0
                     ? Math.round((todos.filter((t: any) => t.isComplete).length / todos.length) * 100)
                     : 0
                 });
@@ -469,7 +469,7 @@ class SoftwarePlanningServer {
               }
             }
           }
-          
+
           return {
             content: [{
               type: 'text',
@@ -479,22 +479,22 @@ class SoftwarePlanningServer {
         }
 
         case 'switch_branch': {
-          const { branch, projectPath } = request.params.arguments as { 
-            branch: string; 
-            projectPath?: string; 
+          const { branch, projectPath } = request.params.arguments as {
+            branch: string;
+            projectPath?: string;
           };
-          
+
           // Get storage for the new branch
           this.currentStorage = await this.getStorage(projectPath, branch);
-          
+
           // Get existing todos for this branch
           const existingTodos = await this.currentStorage.getAllTodos();
           const existingGoals = await this.currentStorage.getGoals();
-          
+
           if (existingTodos.length > 0) {
             // Set current goal to the most recent one
             this.currentGoal = Object.values(existingGoals)[0];
-            
+
             return {
               content: [{
                 type: 'text',

@@ -47,7 +47,7 @@ npm run check:stdout
 ```
 
 This scans source code for patterns that could cause pollution:
-- `console.log()` 
+- `console.log()`
 - `process.stdout.write()`
 - `console.info()`
 - `console.warn()` (platform-dependent)
@@ -91,7 +91,7 @@ npm run build:unsafe  # Skips checks (only for debugging)
 # Test for code-level issues
 npm run check:stdout
 
-# Test actual protocol compliance  
+# Test actual protocol compliance
 npm run test:stdout
 
 # Run all tests including pollution prevention

@@ -2,7 +2,7 @@
 
 /**
  * Stdout Pollution Checker for MCP Servers
- * 
+ *
  * This script scans the source code for potential stdout pollution issues
  * that could break MCP JSON-RPC protocol compliance.
  */
@@ -35,18 +35,18 @@ const POLLUTION_PATTERNS = [
 function findTSFiles(dir) {
   let files = [];
   const entries = readdirSync(dir);
-  
+
   for (const entry of entries) {
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath);
-    
+
     if (stat.isDirectory() && !entry.startsWith('.')) {
       files = files.concat(findTSFiles(fullPath));
     } else if (entry.endsWith('.ts')) {
       files.push(fullPath);
     }
   }
-  
+
   return files;
 }
 
@@ -61,7 +61,7 @@ SOURCE_FILES.forEach(filePath => {
 
   POLLUTION_PATTERNS.forEach(({ pattern, message, suggestion }) => {
     let match;
-    
+
     while ((match = pattern.exec(content)) !== null) {
       // Find the line number
       const beforeMatch = content.substring(0, match.index);
@@ -82,7 +82,7 @@ SOURCE_FILES.forEach(filePath => {
         pattern: pattern.source
       });
     }
-    
+
     // Reset regex lastIndex for next iteration
     pattern.lastIndex = 0;
   });
@@ -96,7 +96,7 @@ if (ISSUES_FOUND.length === 0) {
 } else {
   console.error('❌ Stdout pollution issues detected!\n');
   console.error('   These issues will break MCP JSON-RPC protocol compliance.\n');
-  
+
   ISSUES_FOUND.forEach((issue, index) => {
     console.error(`${index + 1}. ${issue.file}:${issue.line}`);
     console.error(`   Code: ${issue.code}`);
@@ -106,6 +106,6 @@ if (ISSUES_FOUND.length === 0) {
 
   console.error('🚨 CRITICAL: MCP servers must not write anything to stdout except JSON-RPC responses!');
   console.error('   All debug, log, and error messages must use stderr (console.error).\n');
-  
+
   process.exit(1);
 }

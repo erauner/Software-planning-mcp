@@ -15,12 +15,12 @@ describe('MCP Protocol Compliance', () => {
 
       let stdoutData = '';
       let stderrData = '';
-      
+
       // Collect all stdout and stderr data
       serverProcess.stdout.on('data', (data) => {
         stdoutData += data.toString();
       });
-      
+
       serverProcess.stderr.on('data', (data) => {
         stderrData += data.toString();
       });
@@ -39,38 +39,38 @@ describe('MCP Protocol Compliance', () => {
         // List tools
         { jsonrpc: '2.0', id: 1, method: 'tools/list' },
         // Start planning (might trigger git branch detection)
-        { 
-          jsonrpc: '2.0', 
-          id: 2, 
-          method: 'tools/call', 
-          params: { 
-            name: 'start_planning', 
-            arguments: { goal: 'Test stdout pollution' } 
-          } 
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'start_planning',
+            arguments: { goal: 'Test stdout pollution' }
+          }
         },
         // Add todo
-        { 
-          jsonrpc: '2.0', 
-          id: 3, 
-          method: 'tools/call', 
-          params: { 
-            name: 'add_todo', 
-            arguments: { 
-              title: 'Test todo', 
-              description: 'Test description', 
-              complexity: 5 
-            } 
-          } 
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'add_todo',
+            arguments: {
+              title: 'Test todo',
+              description: 'Test description',
+              complexity: 5
+            }
+          }
         },
         // List branch todos (might trigger file operations)
-        { 
-          jsonrpc: '2.0', 
-          id: 4, 
-          method: 'tools/call', 
-          params: { 
-            name: 'list_branch_todos', 
-            arguments: {} 
-          } 
+        {
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'list_branch_todos',
+            arguments: {}
+          }
         }
       ];
 
@@ -87,16 +87,16 @@ describe('MCP Protocol Compliance', () => {
 
       serverProcess.stdout.on('data', (data) => {
         const chunk = data.toString();
-        
+
         // Try to parse each line as JSON
         const lines = chunk.trim().split('\n').filter(line => line.trim());
-        
+
         for (const line of lines) {
           try {
             const response = JSON.parse(line);
             responses.push({ line, parsed: response });
             responseCount++;
-            
+
             // Send next request after getting a response
             if (responseCount < requests.length) {
               setTimeout(sendNextRequest, 100);
@@ -134,16 +134,16 @@ describe('MCP Protocol Compliance', () => {
       });
 
       // Verify we got valid JSON responses for all requests
-      assert.equal(responses.length, requests.length, 
+      assert.equal(responses.length, requests.length,
         `Expected ${requests.length} JSON responses, got ${responses.length}`);
 
       // Verify all responses are valid JSON-RPC
       responses.forEach((response, index) => {
-        assert.ok(response.parsed.jsonrpc, 
+        assert.ok(response.parsed.jsonrpc,
           `Response ${index + 1} missing jsonrpc field: ${response.line}`);
-        assert.ok(response.parsed.id !== undefined, 
+        assert.ok(response.parsed.id !== undefined,
           `Response ${index + 1} missing id field: ${response.line}`);
-        assert.ok(response.parsed.result || response.parsed.error, 
+        assert.ok(response.parsed.result || response.parsed.error,
           `Response ${index + 1} missing result or error field: ${response.line}`);
       });
 
@@ -157,7 +157,7 @@ describe('MCP Protocol Compliance', () => {
       // Create a temporary non-git directory
       const { mkdtemp, rm } = await import('fs/promises');
       const { tmpdir } = await import('os');
-      
+
       const tempDir = await mkdtemp(path.join(tmpdir(), 'mcp-test-'));
 
       try {
@@ -173,7 +173,7 @@ describe('MCP Protocol Compliance', () => {
 
         serverProcess.stdout.on('data', (data) => {
           const lines = data.toString().trim().split('\n').filter(line => line.trim());
-          
+
           for (const line of lines) {
             try {
               JSON.parse(line);
@@ -230,7 +230,7 @@ describe('MCP Protocol Compliance', () => {
         });
 
         assert.ok(!pollutionDetected, 'No stdout pollution should be detected in non-git directory');
-        
+
       } finally {
         // Cleanup
         await rm(tempDir, { recursive: true, force: true });
@@ -240,11 +240,11 @@ describe('MCP Protocol Compliance', () => {
     it('should not leak git command output to stdout', async () => {
       // Test that git command failures don't pollute stdout
       const serverPath = path.resolve('./build/index.js');
-      
+
       // Create a directory that looks like git but isn't
       const { mkdtemp, rm, mkdir, writeFile } = await import('fs/promises');
       const { tmpdir } = await import('os');
-      
+
       const tempDir = await mkdtemp(path.join(tmpdir(), 'fake-git-'));
       const gitDir = path.join(tempDir, '.git');
       await mkdir(gitDir);
@@ -260,7 +260,7 @@ describe('MCP Protocol Compliance', () => {
 
         serverProcess.stdout.on('data', (data) => {
           const content = data.toString();
-          
+
           // Check for common git error patterns that might leak
           const gitErrorPatterns = [
             /fatal:/i,
@@ -305,7 +305,7 @@ describe('MCP Protocol Compliance', () => {
                 }
               };
               serverProcess.stdin.write(JSON.stringify(request) + '\n');
-              
+
               setTimeout(() => {
                 if (!gitErrorDetected) {
                   clearTimeout(timeout);
