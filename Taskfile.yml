@@ -92,6 +92,19 @@ tasks:
       - rm -rf .planning
       - echo "Clean complete"
 
+  # Container operations
+  push-harbor:
+    desc: "Build & push image to Harbor (local)"
+    cmds:
+      - make docker-push-harbor
+      - echo "Image pushed to Harbor registry"
+
+  push-ghcr:
+    desc: "Build & push image to GHCR (local)"
+    cmds:
+      - make docker-push REGISTRY=ghcr.io
+      - echo "Image pushed to GHCR registry"
+
   # Git operations
   pre-commit:
     desc: "Run pre-commit hooks manually"

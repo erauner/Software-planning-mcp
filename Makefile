@@ -32,15 +32,25 @@ up:
 down:
 	docker-compose down
 
-# === GHCR Docker Build & Push ===
+# === Docker Build & Push ===
 
-# GitHub Container Registry settings
+# Registry settings (supports both GHCR and Harbor)
 GITHUB_USERNAME ?= erauner
-REGISTRY = ghcr.io
-IMAGE_NAME = $(REGISTRY)/$(GITHUB_USERNAME)/software-planning-mcp
+SECRET_DOMAIN ?= erauner.dev
+REGISTRY ?= ghcr.io
+HARBOR_REGISTRY = harbor.$(SECRET_DOMAIN)
+HARBOR_USERNAME ?= robot$$library+deployer
+HARBOR_PASSWORD ?=
+
+# Image naming
+ifeq ($(REGISTRY),$(HARBOR_REGISTRY))
+    IMAGE_NAME = $(REGISTRY)/library/software-planning-mcp
+else
+    IMAGE_NAME = $(REGISTRY)/$(GITHUB_USERNAME)/software-planning-mcp
+endif
 VERSION ?= latest
 
-# Build for GHCR
+# Build for any registry
 docker-build:
 	@echo "🔨 Building Docker image: $(IMAGE_NAME):$(VERSION)"
 	docker build -t $(IMAGE_NAME):$(VERSION) .
@@ -50,30 +60,45 @@ docker-build:
 	fi
 	@echo "✅ Build complete!"
 	@echo "📦 Images built:"
-	@docker images | grep $(GITHUB_USERNAME)/software-planning-mcp || echo "No images found"
+	@docker images | grep software-planning-mcp || echo "No images found"
 
-# Login to GHCR
+# Login to registry (GHCR or Harbor)
 docker-login:
-	@echo "🔐 Logging into GitHub Container Registry..."
-	@if [ -z "$$GITHUB_TOKEN" ]; then \
-		echo "❌ Error: GITHUB_TOKEN environment variable not set!"; \
-		echo "💡 Run: export GITHUB_TOKEN=your_github_personal_access_token"; \
-		echo "📚 Create a token at: https://github.com/settings/tokens/new"; \
-		echo "   Required scopes: write:packages, read:packages, delete:packages"; \
-		exit 1; \
+	@if [ "$(REGISTRY)" = "$(HARBOR_REGISTRY)" ]; then \
+		echo "🔐 Logging into Harbor Registry..."; \
+		if [ -z "$$HARBOR_PASSWORD" ]; then \
+			echo "❌ Error: HARBOR_PASSWORD environment variable not set!"; \
+			echo "💡 Run: export HARBOR_PASSWORD=your_harbor_robot_token"; \
+			exit 1; \
+		fi; \
+		echo $$HARBOR_PASSWORD | docker login $(REGISTRY) -u $(HARBOR_USERNAME) --password-stdin; \
+		echo "✅ Successfully logged into Harbor!"; \
+	else \
+		echo "🔐 Logging into GitHub Container Registry..."; \
+		if [ -z "$$GITHUB_TOKEN" ]; then \
+			echo "❌ Error: GITHUB_TOKEN environment variable not set!"; \
+			echo "💡 Run: export GITHUB_TOKEN=your_github_personal_access_token"; \
+			echo "📚 Create a token at: https://github.com/settings/tokens/new"; \
+			echo "   Required scopes: write:packages, read:packages, delete:packages"; \
+			exit 1; \
+		fi; \
+		echo $$GITHUB_TOKEN | docker login $(REGISTRY) -u $(GITHUB_USERNAME) --password-stdin; \
+		echo "✅ Successfully logged into GHCR!"; \
 	fi
-	@echo $$GITHUB_TOKEN | docker login $(REGISTRY) -u $(GITHUB_USERNAME) --password-stdin
-	@echo "✅ Successfully logged into GHCR!"
 
-# Push to GHCR
+# Push to registry
 docker-push: docker-login docker-build
-	@echo "📤 Pushing to GitHub Container Registry..."
+	@echo "📤 Pushing to $(REGISTRY)..."
 	docker push $(IMAGE_NAME):$(VERSION)
 	@if [ "$(VERSION)" != "latest" ]; then \
 		docker push $(IMAGE_NAME):latest; \
 	fi
 	@echo "✅ Push complete!"
 	@echo "🌐 Image available at: $(IMAGE_NAME):$(VERSION)"
+
+# Harbor-specific push target
+docker-push-harbor:
+	$(MAKE) docker-push REGISTRY=$(HARBOR_REGISTRY)
 
 # Full release process
 docker-release: docker-push
