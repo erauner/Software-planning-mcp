@@ -447,9 +447,11 @@ class SoftwarePlanningServer {
           for (const file of files) {
             if (file.endsWith('.todos.json')) {
               try {
-                const branchName = file.replace('.todos.json', '').replace(/-/g, '/');
                 const data = await fs.readFile(path.join(planningDir, file), 'utf-8');
                 const parsed = JSON.parse(data);
+                
+                // Use the branch name stored in the file data, not the filename
+                const branchName = parsed.branch || file.replace('.todos.json', '');
                 
                 const todos = Object.values(parsed.plans || {})
                   .flatMap((plan: any) => plan.todos || []);
