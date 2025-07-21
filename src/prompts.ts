@@ -67,29 +67,83 @@ export const formatPlanAsTodos = (plan: string): Array<{
   complexity: number;
   codeExample?: string;
 }> => {
-  // This is a placeholder implementation
-  // In a real system, this would use more sophisticated parsing
-  // to extract todos from the plan text
-  const todos = plan.split('\n\n')
-    .filter(section => section.trim().length > 0)
+  if (!plan || plan.trim().length === 0) {
+    return [];
+  }
+
+  // Split by numbered items (1., 2., 3., etc.)
+  const sections = plan.split(/(?=\n?\d+\.\s)/);
+
+  const todos = sections
+    .filter(section => section.trim().length > 0 && /^\d+\.\s/.test(section.trim()))
     .map(section => {
-      const lines = section.split('\n');
+      const lines = section.trim().split('\n');
       const title = lines[0].replace(/^[0-9]+\.\s*/, '').trim();
       const complexity = parseInt(section.match(/Complexity:\s*([0-9]+)/)?.[1] || '5');
-      const codeExample = section.match(/\`\`\`[^\`]*\`\`\`/)?.[0];
+      const codeExample = section.match(/\`\`\`[\s\S]*?\`\`\`/)?.[0];
       const description = section
-        .replace(/^[0-9]+\.\s*[^\n]*\n/, '')
-        .replace(/Complexity:\s*[0-9]+/, '')
-        .replace(/\`\`\`[^\`]*\`\`\`/, '')
+        .replace(/^[0-9]+\.\s*[^\n]*\n?/, '')
+        .replace(/Complexity:\s*[0-9]+/g, '')
+        .replace(/\`\`\`[\s\S]*?\`\`\`/g, '')
         .trim();
 
       return {
         title,
         description,
         complexity,
-        codeExample: codeExample?.replace(/^\`\`\`|\`\`\`$/g, ''),
+        codeExample: codeExample?.replace(/^\`\`\`[a-zA-Z]*\n?|\`\`\`$/g, ''),
       };
     });
 
   return todos;
 };
+
+export function formatTodosForDisplay(todos: any[], branch: string): string {
+  const completed = todos.filter(t => t.isComplete);
+  const pending = todos.filter(t => !t.isComplete);
+
+  let output = `⏺ Current Todos (branch: ${branch})\n\n`;
+
+  if (pending.length > 0) {
+    output += '  ⎿ Active Tasks:\n';
+    pending.forEach(todo => {
+      output += `     ☐ ${todo.title}`;
+      if (todo.complexity !== undefined) {
+        output += ` (Complexity: ${todo.complexity})`;
+      }
+      output += '\n';
+    });
+  }
+
+  if (completed.length > 0) {
+    output += '\n  ⎿ Completed:\n';
+    completed.forEach(todo => {
+      output += `     ☒ ${todo.title}\n`;
+    });
+  }
+
+  if (todos.length === 0) {
+    output += '  ⎿ No todos yet. Start adding tasks!\n';
+  }
+
+  return output;
+}
+
+export function formatBranchSummary(branchSummaries: any[]): string {
+  let output = '🌳 Todo Summary Across Branches\n\n';
+
+  if (branchSummaries.length === 0) {
+    output += '  ⎿ No todos found in any branch\n';
+    return output;
+  }
+
+  branchSummaries.forEach(summary => {
+    const filledBlocks = Math.floor(summary.percentage / 10);
+    const emptyBlocks = 10 - filledBlocks;
+    const progressBar = '█'.repeat(filledBlocks) + '□'.repeat(emptyBlocks);
+
+    output += `  ⎿ ${summary.branch}: ${summary.completed}/${summary.total} (${summary.percentage}%) [${progressBar}]\n`;
+  });
+
+  return output;
+}

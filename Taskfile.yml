@@ -1,0 +1,125 @@
+# Taskfile for Software Planning MCP
+# Usage: task <command>
+# Install Task: https://taskfile.dev/#/installation
+
+version: '3'
+
+vars:
+  BUILD_DIR: build
+
+tasks:
+  # Core build and test tasks
+  build:
+    desc: "Build the project with all checks"
+    cmds:
+      - task: check-pollution
+      - npx tsc
+      - chmod +x {{.BUILD_DIR}}/index.js
+      - echo "Build complete!"
+
+  build-unsafe:
+    desc: "Build without pollution checks (debugging only)"
+    cmds:
+      - npx tsc
+      - chmod +x {{.BUILD_DIR}}/index.js
+      - echo "Unsafe build complete"
+
+  test:
+    desc: "Run all tests"
+    cmds:
+      - task: build-unsafe
+      - node --test test/prompts.test.js test/storage.test.js
+      - echo "Tests completed"
+
+  test-quick:
+    desc: "Quick test run (unit tests + pollution check only)"
+    cmds:
+      - task: check-pollution
+      - task: build-unsafe
+      - node --test test/prompts.test.js
+      - echo "Quick tests passed"
+
+  # Quality checks
+  check:
+    desc: "Run all code quality checks"
+    cmds:
+      - task: check-pollution
+      - task: check-typescript
+      - echo "All quality checks passed"
+
+  check-pollution:
+    desc: "Check for stdout pollution (critical for MCP)"
+    cmds:
+      - node scripts/check-stdout-pollution.mjs
+
+  check-typescript:
+    desc: "Type check TypeScript without emitting files"
+    cmds:
+      - npx tsc --noEmit
+
+  # MCP server operations
+  start:
+    desc: "Start the MCP server"
+    cmds:
+      - task: build
+      - node {{.BUILD_DIR}}/index.js
+
+  inspect:
+    desc: "Start MCP inspector for testing"
+    cmds:
+      - task: build
+      - npx @modelcontextprotocol/inspector {{.BUILD_DIR}}/index.js
+
+  # Setup and maintenance
+  setup:
+    desc: "Initial project setup"
+    cmds:
+      - pnpm install
+      - task: setup-git-hooks
+      - task: build
+      - echo "Project setup complete"
+
+  setup-git-hooks:
+    desc: "Setup git hooks (pre-commit)"
+    cmds:
+      - pre-commit install || echo "pre-commit installation failed"
+      - pre-commit install --hook-type commit-msg || echo "commit-msg hook failed"
+
+  clean:
+    desc: "Clean build artifacts"
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -rf .planning
+      - echo "Clean complete"
+
+  # Git operations
+  pre-commit:
+    desc: "Run pre-commit hooks manually"
+    cmds:
+      - pre-commit run --all-files
+
+  ci:
+    desc: "Simulate CI/CD pipeline"
+    cmds:
+      - task: clean
+      - pnpm install
+      - task: check
+      - task: build
+      - task: test-quick
+      - echo "CI simulation passed"
+
+  # Help
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list
+      - echo ""
+      - echo "Quick start:"
+      - echo "  task setup    - First time setup"
+      - echo "  task build    - Build project"
+      - echo "  task test     - Run tests"
+      - echo "  task start    - Start MCP server"
+      - echo ""
+      - echo "Quality checks:"
+      - echo "  task check    - Run all quality checks"
+      - echo "  task ci       - Simulate CI pipeline"

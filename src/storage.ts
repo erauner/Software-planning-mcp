@@ -1,38 +1,97 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import os from 'os';
-import { StorageData, Goal, ImplementationPlan, Todo } from './types.js';
+import { execSync } from "child_process";
+import { promises as fs } from "fs";
+import path from "path";
+import { Goal, ImplementationPlan, StorageData, Todo } from "./types.js";
 
 export class Storage {
   private storagePath: string;
   private data: StorageData;
+  private projectPath: string;
+  private currentBranch: string;
 
-  constructor() {
-    // Store data in user's home directory under .software-planning-tool
-    const dataDir = path.join(os.homedir(), '.software-planning-tool');
-    this.storagePath = path.join(dataDir, 'data.json');
+  constructor(projectPath?: string, overrideBranch?: string) {
+    this.projectPath = projectPath || process.cwd();
+    this.currentBranch = overrideBranch || this.getCurrentGitBranch();
+
+    const dataDir = path.join(this.projectPath, ".planning");
+    const safeBranch = this.sanitizeBranchName(this.currentBranch);
+    this.storagePath = path.join(dataDir, `${safeBranch}.todos.json`);
+
+    // Update data structure
     this.data = {
+      branch: this.currentBranch,
+      projectPath: this.projectPath,
       goals: {},
       plans: {},
+      lastUpdated: null,
     };
+  }
+
+  private getCurrentGitBranch(): string {
+    try {
+      const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+        cwd: this.projectPath,
+        encoding: "utf-8",
+      }).trim();
+      return branch || "main";
+    } catch (error) {
+      // Not a git repo or git not available
+      console.error("Not a git repository, using default branch name");
+      return "default";
+    }
+  }
+
+  private sanitizeBranchName(branch: string): string {
+    // Replace problematic characters for filenames
+    // feature/auth-system -> feature-auth-system
+    // fix/bug#123 -> fix-bug-123
+    return branch.replace(/[^a-zA-Z0-9-_]/g, "-");
+  }
+
+  getCurrentBranch(): string {
+    return this.currentBranch;
+  }
+
+  getProjectPath(): string {
+    return this.projectPath;
+  }
+
+  getTodoCount(): number {
+    return Object.values(this.data.plans).reduce(
+      (count, plan) => count + plan.todos.length,
+      0
+    );
+  }
+
+  async getAllTodos(): Promise<Todo[]> {
+    return Object.values(this.data.plans).flatMap((plan) => plan.todos);
+  }
+
+  async getGoals(): Promise<Record<string, Goal>> {
+    return this.data.goals;
   }
 
   async initialize(): Promise<void> {
     try {
-      // Create data directory if it doesn't exist
       const dataDir = path.dirname(this.storagePath);
       await fs.mkdir(dataDir, { recursive: true });
 
-      // Try to read existing data
-      const data = await fs.readFile(this.storagePath, 'utf-8');
+      // Try to read existing data for this branch
+      const data = await fs.readFile(this.storagePath, "utf-8");
       this.data = JSON.parse(data);
+
+      console.error(`Loaded existing todos from ${this.storagePath}`);
+      console.error(`Branch: ${this.data.branch}, Todos: ${this.getTodoCount()}`);
     } catch (error) {
-      // If file doesn't exist or can't be read, use default empty data
+      // First time - create new file
+      console.error(`Creating new todo file for branch: ${this.currentBranch}`);
+      this.data.lastUpdated = new Date().toISOString();
       await this.save();
     }
   }
 
   private async save(): Promise<void> {
+    this.data.lastUpdated = new Date().toISOString();
     await fs.writeFile(this.storagePath, JSON.stringify(this.data, null, 2));
   }
 
@@ -70,7 +129,12 @@ export class Storage {
 
   async addTodo(
     goalId: string,
-    { title, description, complexity, codeExample }: Omit<Todo, 'id' | 'isComplete' | 'createdAt' | 'updatedAt'>
+    {
+      title,
+      description,
+      complexity,
+      codeExample,
+    }: Omit<Todo, "id" | "isComplete" | "createdAt" | "updatedAt">
   ): Promise<Todo> {
     const plan = await this.getPlan(goalId);
     if (!plan) {
@@ -105,7 +169,11 @@ export class Storage {
     await this.save();
   }
 
-  async updateTodoStatus(goalId: string, todoId: string, isComplete: boolean): Promise<Todo> {
+  async updateTodoStatus(
+    goalId: string,
+    todoId: string,
+    isComplete: boolean
+  ): Promise<Todo> {
     const plan = await this.getPlan(goalId);
     if (!plan) {
       throw new Error(`No plan found for goal ${goalId}`);
@@ -129,4 +197,4 @@ export class Storage {
   }
 }
 
-export const storage = new Storage();
+// Remove the global storage instance - it will be created per project/branch
