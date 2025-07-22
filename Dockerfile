@@ -21,8 +21,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install pnpm in production image
-RUN npm install -g pnpm
+# Install pnpm and supergateway in production image
+RUN npm install -g pnpm supergateway
 
 # Copy package files and install production dependencies only
 COPY package*.json ./
