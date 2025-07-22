@@ -159,3 +159,23 @@ k8s-demo:
 # Interactive MCP client
 k8s-interactive:
 	@./scripts/k8s-example-usage.sh interactive
+
+# Redis data inspector (requires local redis-cli)
+k8s-redis-inspector:
+	@./scripts/k8s-redis-inspector.sh menu
+
+# Redis direct access (no redis-cli required)
+k8s-redis:
+	@./scripts/k8s-redis-direct.sh
+
+# List Redis keys
+k8s-redis-list:
+	@./scripts/k8s-redis-direct.sh list
+
+# Redis statistics
+k8s-redis-stats:
+	@./scripts/k8s-redis-direct.sh stats
+
+# Dump all Redis data
+k8s-redis-dump:
+	@./scripts/k8s-redis-direct.sh dump
