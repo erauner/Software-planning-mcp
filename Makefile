@@ -126,101 +126,36 @@ docker-verify:
 # === Kubernetes Testing ===
 
 # Test the live K8s deployment
-k8s-test: k8s-test-health k8s-test-tools k8s-test-session
+k8s-test:
+	@./scripts/k8s-test.sh
 
-# Check health endpoint
-k8s-test-health:
-	@echo "🏥 Testing K8s deployment health..."
-	@POD=$$(kubectl get pods -n devops -l app=mcp-software-planning -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); \
-	if [ -z "$$POD" ]; then \
-		echo "❌ No MCP pod found in devops namespace"; \
-		exit 1; \
-	fi; \
-	echo "📦 Testing pod: $$POD"; \
-	kubectl exec -n devops $$POD -- curl -s http://localhost:4626/health | jq '.' || echo "❌ Health check failed"
+# Quick smoke test for K8s deployment
+k8s-quick-test:
+	@./scripts/k8s-quick-test.sh
 
-# Test all MCP tools via port-forward
+# Test MCP tools functionality
 k8s-test-tools:
-	@echo "🛠️  Testing MCP tools via K8s..."
-	@echo "⏳ Starting port-forward..."
-	@kubectl port-forward -n devops svc/mcp-software-planning 4626:4626 > /dev/null 2>&1 & \
-	PF_PID=$$!; \
-	sleep 3; \
-	echo "1️⃣  Testing tools/list..."; \
-	curl -s -X POST http://localhost:4626/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/list","id":1}' | \
-		jq -r 'if .result.tools then "✅ Found \(.result.tools | length) tools" else "❌ Failed to list tools" end' || echo "❌ Request failed"; \
-	echo ""; \
-	echo "2️⃣  Testing create_goal tool..."; \
-	curl -s -X POST http://localhost:4626/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_goal","arguments":{"description":"Test goal from K8s","userId":"test-user","sessionId":"test-session"}},"id":2}' | \
-		jq -r 'if .result then "✅ Goal created successfully" else "❌ Failed to create goal: \(.error.message // "unknown error")" end' || echo "❌ Request failed"; \
-	echo ""; \
-	echo "3️⃣  Testing get_current_goal tool..."; \
-	curl -s -X POST http://localhost:4626/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get_current_goal","arguments":{"userId":"test-user","sessionId":"test-session"}},"id":3}' | \
-		jq -r 'if .result.content[0].text then "✅ Retrieved goal: \(.result.content[0].text | fromjson.description)" else "❌ Failed to get goal" end' || echo "❌ Request failed"; \
-	echo ""; \
-	echo "4️⃣  Testing add_todo tool..."; \
-	curl -s -X POST http://localhost:4626/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"add_todo","arguments":{"description":"Test todo item","userId":"test-user","sessionId":"test-session"}},"id":4}' | \
-		jq -r 'if .result then "✅ Todo added successfully" else "❌ Failed to add todo" end' || echo "❌ Request failed"; \
-	echo ""; \
-	echo "5️⃣  Testing list_todos tool..."; \
-	curl -s -X POST http://localhost:4626/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_todos","arguments":{"userId":"test-user","sessionId":"test-session"}},"id":5}' | \
-		jq -r 'if .result.content[0].text then "✅ Listed todos successfully" else "❌ Failed to list todos" end' || echo "❌ Request failed"; \
-	kill $$PF_PID 2>/dev/null || true; \
-	echo ""; \
-	echo "✅ Tool testing complete!"
+	@./scripts/k8s-tools-test.sh
 
-# Test session management (Redis mode)
-k8s-test-session:
-	@echo "🔐 Testing session management..."
-	@POD=$$(kubectl get pods -n devops -l app=mcp-software-planning -o jsonpath='{.items[0].metadata.name}'); \
-	echo "📝 Checking Redis connection..."; \
-	kubectl exec -n devops $$POD -- sh -c 'echo "PING" | nc -w 1 snapdragon.devops.svc.cluster.local 6379' | grep -q "PONG" && \
-		echo "✅ Redis connection successful" || echo "❌ Redis connection failed"; \
-	echo ""; \
-	echo "🔍 Testing session isolation..."; \
-	kubectl port-forward -n devops svc/mcp-software-planning 4627:4626 > /dev/null 2>&1 & \
-	PF_PID=$$!; \
-	sleep 3; \
-	echo "Creating goal for user1..."; \
-	curl -s -X POST http://localhost:4627/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_goal","arguments":{"description":"User1 private goal","userId":"user1","sessionId":"session1"}},"id":10}' | \
-		jq -r '.result' > /dev/null; \
-	echo "Creating goal for user2..."; \
-	curl -s -X POST http://localhost:4627/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_goal","arguments":{"description":"User2 private goal","userId":"user2","sessionId":"session2"}},"id":11}' | \
-		jq -r '.result' > /dev/null; \
-	echo "Verifying user1 can't see user2's goal..."; \
-	RESULT=$$(curl -s -X POST http://localhost:4627/mcp/stream \
-		-H "Content-Type: application/json" \
-		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get_current_goal","arguments":{"userId":"user1","sessionId":"session2"}},"id":12}' | \
-		jq -r '.result.content[0].text' | jq -r '.description' 2>/dev/null); \
-	if [ "$$RESULT" = "null" ] || [ -z "$$RESULT" ]; then \
-		echo "✅ Session isolation working - user1 cannot access user2's session"; \
-	else \
-		echo "❌ Session isolation FAILED - user1 accessed user2's data!"; \
-	fi; \
-	kill $$PF_PID 2>/dev/null || true; \
-	echo ""; \
-	echo "✅ Session testing complete!"
+# Debug K8s deployment
+k8s-debug:
+	@./scripts/k8s-debug.sh
 
-# Full K8s deployment test
-k8s-test-full: k8s-test
-	@echo ""
-	@echo "📋 K8s Deployment Summary:"
-	@echo "=========================="
-	@kubectl get deploy,svc,pods -n devops -l app=mcp-software-planning
-	@echo ""
-	@echo "📊 Resource usage:"
-	@kubectl top pod -n devops -l app=mcp-software-planning 2>/dev/null || echo "Metrics not available"
+# Show logs from K8s deployment
+k8s-logs:
+	@echo "📋 Showing logs for MCP Software Planning..."
+	@kubectl logs -n devops -l app=mcp-software-planning --tail=50 -f
+
+# Quick K8s status check
+k8s-status:
+	@echo "📊 MCP Software Planning K8s Status"
+	@echo "==================================="
+	@kubectl get deploy,pods,svc,httproute -n devops | grep -E "(mcp-software-planning|planning-lab)" || echo "No resources found"
+
+# Run demo scenario
+k8s-demo:
+	@./scripts/k8s-example-usage.sh demo
+
+# Interactive MCP client
+k8s-interactive:
+	@./scripts/k8s-example-usage.sh interactive
