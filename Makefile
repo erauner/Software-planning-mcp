@@ -39,7 +39,7 @@ GITHUB_USERNAME ?= erauner
 SECRET_DOMAIN ?= erauner.dev
 REGISTRY ?= ghcr.io
 HARBOR_REGISTRY = harbor.$(SECRET_DOMAIN)
-HARBOR_USERNAME ?= robot$$library+deployer
+HARBOR_USERNAME ?= robot$$robot_account
 HARBOR_PASSWORD ?=
 
 # Image naming
