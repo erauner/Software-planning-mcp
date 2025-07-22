@@ -179,3 +179,7 @@ k8s-redis-stats:
 # Dump all Redis data
 k8s-redis-dump:
 	@./scripts/k8s-redis-direct.sh dump
+
+# User-friendly Redis viewer
+k8s-redis-view:
+	@./scripts/k8s-redis-viewer.sh all
